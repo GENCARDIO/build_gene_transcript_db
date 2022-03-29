@@ -64,9 +64,9 @@ class Mane():
         grch37_gff = str(Path(grch37_dir)/grch37_gff_name)
         if not os.path.isfile(grch37_gff):
             self.convert_38_to_37(grch38_gff, grch37_gff)
-        os.remove(grch38_gff)
+        # os.remove(grch38_gff)
 
-        return grch37_gff
+        return grch38_gff
 
     def convert_38_to_37(self, input_gff, output_gff):
         '''
