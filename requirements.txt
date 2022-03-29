@@ -1,0 +1,2 @@
+SQLAlchemy==1.4.32
+SQLAlchemy_Utils==0.38.2
