@@ -37,12 +37,12 @@ GENE_TRANSCRIPT_DATABASE
 │       │───GRCh38
 │             MANE.GRCh38.v1.0.ensembl_genomic.gff.gz
 │
-└───ENSEMBL
-│   └───105
+└───GENCODE
+│   └───39
 │       │───GRCh37
-│             Homo_sapiens.GRCh37.105.gff3.gz
+│             gencode.v39lift37.annotation.gff3.gz
 │       │───GRCh38
-│             Homo_sapiens.GRCh38.105.gff3.gz
+│             gencode.v39.annotation.gff3.gz
 │
 └───RefSeq
 │   └───102
