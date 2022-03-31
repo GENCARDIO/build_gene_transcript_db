@@ -5,6 +5,7 @@ import re
 from collections import defaultdict
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy_utils import database_exists, create_database
 from sqlalchemy import Column, Integer, String, Float
@@ -12,8 +13,7 @@ from datetime import datetime
 import logging
 logger = logging.getLogger(__name__)
 
-
-def get_mane_transcripts(mane_gff):
+def get_mane_transcripts(mane_gff: str):
     '''
     '''
     mane_transcripts_dict = defaultdict(dict)
@@ -50,7 +50,57 @@ def get_mane_transcripts(mane_gff):
 
     return mane_transcripts_dict
 
-def get_ensembl_transcripts(ensembl_gff):
+def get_gencode_transcripts(gencode_gff: str):
+    '''
+    '''
+    gencode_genes = defaultdict(dict)
+    gencode_genes_dict = defaultdict(dict)
+    gencode_transcripts_dict = defaultdict(dict)
+
+    with gzip.open(gencode_gff, 'rt') as fin:
+        for line in fin:
+            line = line.rstrip("\n")
+
+            if line.startswith("#"):
+                continue
+            tmp = line.split("\t")
+            feature = tmp[2]
+            chr  = tmp[0].replace("chr", "")
+            pos  = tmp[3]
+            end  = tmp[4]
+            info = tmp[8].split(";")
+
+            if feature == "CDS":
+                gene_name = next(filter(lambda item: item.startswith("gene_name="), info), None)
+                gene_name = gene_name.replace("gene_name=", "")
+                enst_id = next(filter(lambda item: item.startswith("transcript_id="), info), None)
+                if enst_id:
+                    enst_id = enst_id.replace("transcript_id=", "")
+                    tmp = enst_id.split(".")
+                    enst_id = tmp[0]
+                else:
+                    enst_id = next(filter(lambda item: item.startswith("Parent=transcript:"), info), None)
+                    enst_id = enst_id.replace("Parent=transcript:", "")
+                    tmp = enst_id.split(".")
+                    enst_id = tmp[0]
+                ensp_id = next(filter(lambda item: item.startswith("protein_id="), info), None)
+                ensp_id = ensp_id.replace("protein_id=", "")
+
+                if not gene_name in gencode_genes_dict:
+                    gencode_genes_dict[gene_name]['transcripts'] = set()
+                gencode_genes_dict[gene_name]['transcripts'].add(enst_id)
+
+                if not enst_id in gencode_transcripts_dict:
+                    gencode_transcripts_dict[enst_id] = defaultdict(dict)
+                    gencode_transcripts_dict[enst_id]['exons'] = defaultdict(dict)
+                coordinates = ("{}:{}-{}").format(chr, pos, end)
+                gencode_transcripts_dict[enst_id]['exons'][coordinates] = ""
+                gencode_transcripts_dict[enst_id]['gene_name'] = gene_name
+                gencode_transcripts_dict[enst_id]['ensp'] = ensp_id
+
+    return gencode_transcripts_dict, gencode_genes_dict
+
+def get_ensembl_transcripts(ensembl_gff: str):
     '''
     '''
     ensembl_genes = defaultdict(dict)
@@ -118,11 +168,11 @@ def get_ensembl_transcripts(ensembl_gff):
 
     return ensembl_transcripts, ensembl_genes_dict
 
-def get_refseq_transcripts(refseq_gff):
+def get_refseq_transcripts(refseq_gff: str):
     '''
     '''
     refseq_transcripts = defaultdict(dict)
-    refseq_genes_dict = defaultdict(dict)
+    refseq_genes_dict  = defaultdict(dict)
     with gzip.open(refseq_gff, 'rt') as fin:
         for line in fin:
             line = line.rstrip("\n")
@@ -164,7 +214,7 @@ def get_refseq_transcripts(refseq_gff):
 
     return refseq_transcripts, refseq_genes_dict
 
-def get_lrg_transcripts(lrg_txt):
+def get_lrg_transcripts(lrg_txt: str):
     '''
     '''
     lrg_transcripts = defaultdict(dict)
@@ -180,8 +230,8 @@ def get_lrg_transcripts(lrg_txt):
             lrg_transcript = tmp[3]
             tmp_refseq = tmp[4].split(".")
             refseq_id  = tmp_refseq[0]
-            tmp_enst = tmp[5].split(".")
-            enst_id  = tmp_enst[0]
+            tmp_enst   = tmp[5].split(".")
+            enst_id    = tmp_enst[0]
             if not enst_id in lrg_transcripts:
                 lrg_transcripts[enst_id] = defaultdict(dict)
                 lrg_transcripts[enst_id]['LRG_ID'] = lrg_id
@@ -190,22 +240,26 @@ def get_lrg_transcripts(lrg_txt):
         f.close()
     return lrg_transcripts
 
-def build_database(input_file_dict, output_dir, versions_dict):
+def build_database(genome_version: str, input_file_dict, output_dir, versions_dict):
     '''
     '''
 
-    mane_transcripts_dict = get_mane_transcripts(input_file_dict['mane'])
-    ensembl_transcripts_dict, ensembl_genes_dict= get_ensembl_transcripts(input_file_dict['ensembl'])
-    refseq_transcripts_dict, refseq_genes_dict  = get_refseq_transcripts(input_file_dict['refseq'])
-    lrg_transcripts = get_lrg_transcripts(input_file_dict['lrg'])
+    mane_transcripts_dict = get_mane_transcripts(input_file_dict[genome_version]['mane'])
+    gencode_transcripts_dict, gencode_genes_dict \
+        = get_gencode_transcripts(input_file_dict[genome_version]['gencode'])
+    refseq_transcripts_dict, refseq_genes_dict   \
+        = get_refseq_transcripts(input_file_dict[genome_version]['refseq'])
+    lrg_transcripts = get_lrg_transcripts(input_file_dict[genome_version]['lrg'])
 
     missing_genes =  {
         'refseq'  : [],
-        'ensembl' : []
+        'ensembl' : [],
+        'gencode' : []
     }
 
-    genes_db = output_dir + "/genes.db"
-    engine = create_engine('sqlite:///' + genes_db)
+    # Now define and create the genes database
+    genes_db= output_dir + "/genes.db"
+    engine  = create_engine('sqlite:///' + genes_db)
     Session = sessionmaker(bind=engine)
     session = Session()
     Base = declarative_base()
@@ -227,7 +281,7 @@ def build_database(input_file_dict, output_dir, versions_dict):
         __tablename__ = 'RELEASES'
         ID = Column(Integer, primary_key=True)
         DATE = Column(String)
-        ENSEMBL = Column(String)
+        GENCODE = Column(String)
         REFSEQ = Column(String)
         MANE = Column(String)
         LRG = Column(String)
@@ -238,22 +292,27 @@ def build_database(input_file_dict, output_dir, versions_dict):
     date_time = now.strftime("%d/%m/%Y")
 
     # add source versions
-    releases = Releases(DATE=date_time, ENSEMBL=versions_dict['ensembl'],
-        REFSEQ=versions_dict['refseq'], MANE=versions_dict['mane'],
-        LRG=versions_dict['lrg'])
+    releases = Releases(DATE=date_time,
+        GENCODE=versions_dict[genome_version]['gencode'],
+        # ENSEMBL=versions_dict[genome_version]['ensembl'],
+        REFSEQ=versions_dict[genome_version]['refseq'],
+        MANE=versions_dict[genome_version]['mane'],
+        LRG=versions_dict[genome_version]['lrg'])
     session.add(releases)
     session.commit()
 
+    written_records =  0
     objects = []
-    for gene in ensembl_genes_dict:
-        for enst_id in ensembl_genes_dict[gene]['transcripts']:
+    for gene in gencode_genes_dict:
+        for enst_id in gencode_genes_dict[gene]['transcripts']:
             tag = "."
             mane_select = "."
             mane_plus_clinical = "."
             ensp = "."
             refseq_protein_id = "."
-            if enst_id in ensembl_transcripts_dict:
-                ensp = ensembl_transcripts_dict[enst_id]['ensp']
+            if enst_id in gencode_transcripts_dict:
+                if 'ensp' in gencode_transcripts_dict[enst_id]:
+                    ensp = gencode_transcripts_dict[enst_id]['ensp']
             refseq_protein_id = "."
             lrg_id = "."
             lrg_transcript = "."
@@ -264,11 +323,11 @@ def build_database(input_file_dict, output_dir, versions_dict):
                 mane_select = mane_transcripts_dict[enst_id]['MANE_Select']
                 mane_plus_clinical = mane_transcripts_dict[enst_id]['MANE_Plus_Clinical']
 
-            if not 'exons' in ensembl_transcripts_dict[enst_id]:
-                missing_genes['ensembl'].append(gene)
+            if not 'exons' in gencode_transcripts_dict[enst_id]:
+                missing_genes['gencode'].append(gene)
                 continue
 
-            enst_exons = ensembl_transcripts_dict[enst_id]['exons']
+            enst_exons = gencode_transcripts_dict[enst_id]['exons']
             if not gene in refseq_genes_dict:
                 missing_genes['refseq'].append(gene)
                 continue
@@ -280,11 +339,30 @@ def build_database(input_file_dict, output_dir, versions_dict):
                 if enst_exons == refseq_exons:
                     identical_refseq.append(refseq_id)
 
-            transcript_model = TranscriptModels(GENE_SYMBOL=gene, ENST_ID=enst_id,
-                ENSP_ID=ensp, REFSEQ_CDS_COMPLETE=','.join(identical_refseq),
-                REFSEQ_PROTEIN_ID=refseq_protein_id, MANE_SELECT=mane_select,
-                MANE_PLUS_CLINICAL=mane_plus_clinical, LRG_ID=lrg_id,
+            transcript_model = TranscriptModels(GENE_SYMBOL=gene,
+                ENST_ID=enst_id,
+                ENSP_ID=ensp,
+                REFSEQ_CDS_COMPLETE=','.join(identical_refseq),
+                REFSEQ_PROTEIN_ID=refseq_protein_id,
+                MANE_SELECT=mane_select,
+                MANE_PLUS_CLINICAL=mane_plus_clinical,
+                LRG_ID=lrg_id,
                 LRG_TRANSCRIPT=lrg_transcript)
-            objects.append(transcript_model)
-    session.bulk_save_objects(objects)
-    session.commit()
+            try:
+                objects.append(transcript_model)
+            except:
+                msg = "ERROR: An error occured at database writing"
+                logging.error(msg)
+                raise SQLAlchemyError(msg)
+            else:
+                written_records+=1
+    try:
+        session.bulk_save_objects(objects)
+        session.commit()
+    except:
+        msg = "ERROR: An error occured at database writing"
+        logging.error(msg)
+        raise SQLAlchemyError(msg)
+    else:
+        msg = "INFO: Written up to {} records successfully".format(written_records)
+        logging.info(msg)
