@@ -15,6 +15,11 @@ logger = logging.getLogger(__name__)
 
 def get_mane_transcripts(mane_gff: str):
     '''
+        Function that reads a MANE gff3 file and returns an structured dictionary
+        :param str mane_gff: MANE gff3 file
+        :return: A dict with primary keys pointing to an enst_id,
+            and secondary keys with MANE information
+        :rtype: A defaultdict(dict)
     '''
     mane_transcripts_dict = defaultdict(dict)
     with gzip.open(mane_gff, 'rt') as fin:
@@ -52,6 +57,12 @@ def get_mane_transcripts(mane_gff: str):
 
 def get_gencode_transcripts(gencode_gff: str):
     '''
+        Function that reads a GENCODE gff3 file and returns two structured dictionaries
+            with genes and transcripts
+        :param str mane_gff: GENCODE gff3 file
+        :return: two dicts, one with primary keys pointing to an enst_id, and a second one
+            with gene id's as primary keys
+        :rtype: Two defaultdict(dict)
     '''
     gencode_genes = defaultdict(dict)
     gencode_genes_dict = defaultdict(dict)
@@ -170,6 +181,12 @@ def get_ensembl_transcripts(ensembl_gff: str):
 
 def get_refseq_transcripts(refseq_gff: str):
     '''
+        Function that reads a RefSeq gff3 file and returns two structured dictionaries
+            with genes and transcripts
+        :param str mane_gff: RefSeq gff3 file
+        :return: two dicts, one with primary keys pointing to an enst_id, and a second one
+            with gene id's as primary keys
+        :rtype: Two defaultdict(dict)
     '''
     refseq_transcripts = defaultdict(dict)
     refseq_genes_dict  = defaultdict(dict)
@@ -216,6 +233,12 @@ def get_refseq_transcripts(refseq_gff: str):
 
 def get_lrg_transcripts(lrg_txt: str):
     '''
+        Function that reads a plain txt file with LRG gene/transcript id's gff3 and
+            returns a dictioanry
+        :param str lrg_txt: LRG txt file
+        :return: A dictcionary with primary keys pointing to an enst_id and secondary
+            keys with LRG id's
+        :rtype: defaultdict(dict)
     '''
     lrg_transcripts = defaultdict(dict)
     with open(lrg_txt) as f:
@@ -242,6 +265,12 @@ def get_lrg_transcripts(lrg_txt: str):
 
 def build_database(genome_version: str, input_file_dict, output_dir, versions_dict):
     '''
+        Build a sqlite database with gene/transcript identifiers from GENCODE, RefSeq,
+        MANE and LRG.
+        :param str genome_version: human genome version
+        :param dict input_file_dict: dict with gff3 file location
+        :param str output_dir: output directory
+        :param dict versions_dict: dict with resource versions
     '''
 
     mane_transcripts_dict = get_mane_transcripts(input_file_dict[genome_version]['mane'])
