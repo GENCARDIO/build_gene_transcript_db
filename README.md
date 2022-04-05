@@ -3,7 +3,8 @@
 Create a database to link gene names (HUGO) with the following genome resources: GENCODE/Ensembl, RefSeq, MANE and LRG.
 
 ## TODO
-Check disparity between transcript versions (i.e ENST00001.X)
+* Add RefSeq isoforms whose CDS do not match at 100% with GENCODE/Ensembl
+* Check disparity between transcript versions (i.e ENST00001.X)
 
 ## Installation
 This code has been successfully tested to run in python 3.8.
