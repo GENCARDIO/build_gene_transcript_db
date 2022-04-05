@@ -1,4 +1,4 @@
-# GENE_TRANSCRIPT_DATABASE
+# build_gene_transcript_db
 
 Create a database to link gene names (HUGO) with the following genome resources: GENCODE/Ensembl, RefSeq, MANE and LRG.
 
