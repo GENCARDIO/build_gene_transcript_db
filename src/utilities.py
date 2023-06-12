@@ -11,7 +11,7 @@ def check_crossmap():
     '''
         Chheck if CrossMap.py is available on PATH
     '''
-    cmd = "CrossMap2.py -h"
+    cmd = "CrossMap.py -h"
     try:
         p1 = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE)
@@ -23,6 +23,7 @@ def check_crossmap():
     else:
         output = p1.stdout.decode('UTF-8')
         error  = p1.stderr.decode('UTF-8')
+        print(error)
         if error:
             msg = (" ERROR: cannot execute command {}." \
                 "Please, install CrossMap and make it accessible through the PATH").format(cmd)

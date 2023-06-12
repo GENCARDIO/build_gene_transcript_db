@@ -82,6 +82,7 @@ class GencodeRelease():
 
         tmp_target = target.split(".")
         current_version = tmp_target[1].replace("v", "")
+        print(current_version)
 
         return current_version
 
@@ -93,16 +94,19 @@ class GencodeRelease():
         # move back to parent url ("/")
         self._ftp_cnn.cwd(self._parent_url)
 
+        current_v = self.current_release
+
         url_dict = {
-            'GRCh37' : 'pub/databases/gencode/Gencode_human/latest_release/GRCh37_mapping',
-            'GRCh38' : 'pub/databases/gencode/Gencode_human/latest_release'
+            'GRCh37' : 'pub/databases/gencode/Gencode_human/latest_release/GRCh37_mapping/',
+            'GRCh38' : 'pub/databases/gencode/Gencode_human/latest_release/'
         }
 
         gff_dict =  {
-            'GRCh37' : 'gencode.v39lift37.annotation.gff3.gz',
-            'GRCh38' : 'gencode.v39.annotation.gff3.gz'
+            'GRCh37' : f'gencode.v{current_v}lift37.annotation.gff3.gz',
+            'GRCh38' : f'gencode.v{current_v}.annotation.gff3.gz'
         }
 
+        print(self._genome_version)
         # move to genome version location
         self._ftp_cnn.cwd(url_dict[self._genome_version])
         dest_file = os.path.join(self._working_dir, gff_dict[self._genome_version])

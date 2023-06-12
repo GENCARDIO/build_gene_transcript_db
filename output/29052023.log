@@ -1,0 +1,6 @@
+2023-05-29 15:54:32,923 -  ERROR: cannot execute command CrossMap2.py -h.Please, install CrossMap and make it accessible through the PATH
+2023-05-29 15:56:53,557 -  ERROR: cannot execute command CrossMap2.py -h.Please, install CrossMap and make it accessible through the PATH
+2023-05-29 15:58:40,883 -  ERROR: cannot execute command CrossMap2.py -h.Please, install CrossMap and make it accessible through the PATH
+2023-05-29 15:59:27,000 - INFO: CrossMap.py is available on PATH
+2023-05-29 15:59:27,000 - INFO: Downloading GENCODE GRCh37 transcript annotation
+2023-05-29 16:01:36,934 - ERROR: Could not stablish a connection with ftp.ebi.ac.uk
