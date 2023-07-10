@@ -5,6 +5,8 @@
 *.swp
 *.bak
 
+gene_dict.json
+
 db_uri/
 
 docs/_build
