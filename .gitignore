@@ -5,6 +5,8 @@
 *.swp
 *.bak
 
+db_uri/
+
 docs/_build
 docs/_static
 docs/_templates

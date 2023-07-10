@@ -1,5 +1,13 @@
 # build_gene_transcript_db
 
+# URI NOTES
+
+Create a environment variable called MYSQL_PWD with the passoword of your MYSQL user:
+
+```
+export MYSQL_PWD=your_mysql_password
+```
+
 Create a database to link gene names (HUGO) with the following genome resources: GENCODE/Ensembl, RefSeq, MANE and LRG.
 
 ## TODO
