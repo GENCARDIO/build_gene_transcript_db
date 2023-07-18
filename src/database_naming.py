@@ -84,7 +84,7 @@ def parse_gencode(gencode_gff, global_gene_name_dict):
                     result = inf.split("=")[1]
                     feature_fields.add(field)
 
-                    # if field == "gene_name":
+                    if field == "gene_name":
                     #     if not result in gene_name:
                     #         gene_name.append(result)
                     #     else:
@@ -282,9 +282,15 @@ def get_refseq_transcripts(refseq_gff: str, global_gene_name_dict):
                             if "GeneID" in dbxref_result:
                                 gene_id = dbxref_result.split(":")[1]
                                 feature_dict["id"] = gene_id   
-
+                            elif "hgnc" in dbxref_result:
+                                hgnc_id = dbxref_result.split(":")[-1]
+                                hgnc_id = f"HGNC:{hgnc_id}"
+                                feature_dict["hgnc_id"] = hgnc_id
                     elif field == "name":
                         gene_name = result
+
+                    feature_dict[field] = result
+                refseq_genes_dict[gene_id] = feature_dict
 
                 global_gene_name_dict.setdefault(gene_name, {}).setdefault("refseq", {}).setdefault(gene_id, {})[coordinates] = {}
 
@@ -306,6 +312,7 @@ def get_refseq_transcripts(refseq_gff: str, global_gene_name_dict):
                             if "GeneID" in dbxref_result:
                                 gene_id = dbxref_result.split(":")[1]
                                 feature_dict["id"] = gene_id
+
 
                             # elif "hgnc" in dbxref_result:
                             #     hgnc_id = dbxref_result.split(":")[-1]
@@ -708,6 +715,16 @@ def create_database():
 
         def __repr__(self):
             return f"Gene {self.gene_id}"
+        
+    class RefSeq_Genes(Base):
+        __tablename__ = "RefSeq_Genes"
+        gene_name = Column(String(50), nullable=False)
+        start = Column(Integer, nullbable=False)
+        end = Column(Integer, nullbale=False)
+        chromosome = Column(Integer, nullable=False)
+        id = Column(Integer, nullable=False)
+        hgnc_id = Column(String(50))
+        gene_type = Column(String(50))
 
     association_table_trans_coords = Table(
         'transcripts_refseq_trans_coords',
@@ -820,6 +837,7 @@ def create_database():
 
     return (
         Genes,
+        RefSeq_Genes,
         Transcripts,
         RefseqTranscripts,
         Exons,
@@ -871,6 +889,45 @@ def insert_db_gencode_gene_data(gencode_gene_dict, session, Genes):
     }
 
     for gene, gene_items in gencode_gene_dict.items():
+        filtered_gene_data = {}
+        
+        # Filtering the dict to only contain the key-value pairs that are contained in the database
+        filtered_gene_data = {key: value for key, value in gene_items.items() if key in valid_gene_keys}
+
+        # Using ** it recieves the following data: gene_id="gene_id", start=100, end=200 ...
+        new_gene = Genes(**filtered_gene_data)
+
+        try:
+            print(f"inserting gene {new_gene}")
+            # Add new gene to the session
+            session.add(new_gene)
+            session.commit()
+        except:
+            msg = "Error in database writing"
+            raise SQLAlchemyError(msg)
+        else:
+            msg = f"gene {new_gene} record successfully"
+            logging.info(msg)
+
+def insert_db_refseq_genes(refseq_genes_dict, session, RefSeqGenes):
+     valid_gene_keys = {
+        'gene_id',
+        'start',
+        'end',
+        'chromosome',
+        'id',
+        'tag',
+        'gene_name',
+        'gene_type',
+        'level',
+        "havana_gene",
+        "hgnc_id",
+        "refseq_same_gene_coords",
+        "num_gencode_transcripts",
+        "num_refseq_transcirpts"
+    }
+
+    for gene, gene_items in refseq_genes_dict.items():
         filtered_gene_data = {}
         
         # Filtering the dict to only contain the key-value pairs that are contained in the database
