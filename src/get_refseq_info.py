@@ -306,7 +306,6 @@ def parse_exon_lines(
 
         elif field == "gene":
             gene_name = result
-
         elif field == "transcript_id":
             transcript_id = result
             feature_dict["transcript_id"] = transcript_id
@@ -323,12 +322,11 @@ def parse_exon_lines(
         elif field == "gene_biotype":
             field = "gene_type"
 
-        # if no transcript_id field, we use the parent field as transcript_id
-        if "transcript_id" not in feature_dict:
-            feature_dict["transcript_id"] = parent
-
         # adding all the fields to the dictionary
         feature_dict[field] = result
+    # if no transcript_id field, we use the parent field as transcript_id
+    if "transcript_id" not in feature_dict:
+        feature_dict["transcript_id"] = parent
 
     # Adding only feature dict key:values which keys are defined
     # in RefseqExons dataclass
@@ -394,7 +392,6 @@ def get_gene_synonyms(feature_dict, gene_name_to_synonym_dict):
     gene_name = feature_dict["name"]
     # Adding gene synonyms to the dict
     if "gene_synonyms" in feature_dict:
-        print("entering in gene_synonyms")
         gene_synonyms = set(feature_dict["gene_synonyms"])
         for gene_synonym in gene_synonyms:
             # creating a dict that maps gene_name : gene_synonyms
