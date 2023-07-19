@@ -106,24 +106,158 @@ class EnsemblCds:
         return f"{self.chromosome}:{self.start}-{self.end}"
 
 
-def parse_gene_gff3_line(feature_dict, gencode_genename_geneobject):
+def parse_gff3_line_general_info(line):
+    feature_dict = dict()
+    line = line.rstrip("\n")
+
+    if line.startswith("#"):
+        return None
+    tmp = line.split("\t")
+    feature_dict["feature"] = tmp[2].lower()
+    feature_dict["chromosome"] = tmp[0].replace("chr", "")
+    feature_dict["start"] = tmp[3]
+    feature_dict["end"] = tmp[4]
+    feature_dict["info"] = tmp[8].split(";")
+
+    return (feature_dict)
+
+
+def parse_gene_gff3_line(
+    feature_dict: dict,
+    gencode_genename_geneobject: dict
+):
 
     for inf in feature_dict["info"]:
         field = inf.split("=")[0].lower()
         result = inf.split("=")[1]
-
         feature_dict[field] = result
-        gene_name = feature_dict["gene_name"]
+    gene_name = feature_dict["gene_name"]
 
     # creting dataclass instance of EnsemblGenes with information of gene_dict that is
     # which its keys are defined as variables in the dataclass
-    current_ensembl_gene = EnsemblGenes(**{k: v for k, v in gene_dict.items() if k in EnsemblGenes.__annotations__})
+    current_ensembl_gene = EnsemblGenes(**{k: v for k, v in feature_dict.items() if k in EnsemblGenes.__annotations__})
     if current_ensembl_gene is not None:
         if gene_name not in gencode_genename_geneobject:
             gencode_genename_geneobject[gene_name] = list()
             gencode_genename_geneobject[gene_name].append(current_ensembl_gene)
         else:
             gencode_genename_geneobject[gene_name].append(current_ensembl_gene)
+
+    return (current_ensembl_gene, gencode_genename_geneobject)
+
+
+def parse_transcript_gff3_line(
+    feature_dict: dict,
+    gencode_genename_geneid_transobject,
+    mane_select_ens_id,
+    mane_clin_ens_id,
+    lrg_ensembl
+):
+    for inf in feature_dict["info"]:
+        field = inf.split("=")[0].lower()
+        result = inf.split("=")[1]
+
+        if field == "transcript_id":
+            transcript_id = result
+            if transcript_id in lrg_ensembl:
+                feature_dict["lrg_id"] = lrg_ensembl[transcript_id]["lrg_id"]
+                feature_dict["lrg_transcript"] = lrg_ensembl[transcript_id]["lrg_transcript"]
+                feature_dict["ccds"] = lrg_ensembl[transcript_id]["ccds"]
+
+        elif field == "gene_name":
+            gene_name = result
+
+        elif field == "gene_id":
+            gene_id = result
+
+        # adding all transcript information in feature_dict
+        feature_dict[field] = result
+        # adding mane_select and clin
+    if transcript_id in mane_select_ens_id:
+        feature_dict["mane_select"] = True
+    if transcript_id in mane_clin_ens_id:
+        feature_dict["mane_clin"] = True
+
+    current_ensembl_transcript = EnsemblTranscript(**{k: v for k, v in feature_dict.items() if k in EnsemblTranscript.__annotations__})
+    if current_ensembl_transcript is not None:
+        if gene_name not in gencode_genename_geneid_transobject:
+            gencode_genename_geneid_transobject.setdefault(gene_name, dict())
+        if gene_id not in gencode_genename_geneid_transobject[gene_name]:
+            gencode_genename_geneid_transobject[gene_name].setdefault(gene_id, list())
+            gencode_genename_geneid_transobject[gene_name][gene_id].append(current_ensembl_transcript)
+        else:
+            gencode_genename_geneid_transobject[gene_name][gene_id].append(current_ensembl_transcript)
+
+    return (current_ensembl_transcript, gencode_genename_geneid_transobject)
+
+
+def parse_exon_gff3_line(
+    feature_dict,
+    current_ensembl_transcript,
+    gencode_genename_geneid_transid_exonobject
+):
+
+    for inf in feature_dict["info"]:
+        field = inf.split("=")[0].lower()
+        result = inf.split("=")[1]
+
+        if field == "gene_name":
+            gene_name = result
+        
+        elif field == "gene_id":
+            gene_id = result
+
+        feature_dict[field] = result
+
+    current_ensembl_exon = EnsemblExons(**{k: v for k, v in feature_dict.items() if k in EnsemblExons.__annotations__})
+    if current_ensembl_exon is not None:
+        if gene_name not in gencode_genename_geneid_transid_exonobject:
+            gencode_genename_geneid_transid_exonobject.setdefault(gene_name, dict())
+        if gene_id not in gencode_genename_geneid_transid_exonobject[gene_name]:
+            gencode_genename_geneid_transid_exonobject[gene_name].setdefault(gene_id, dict())
+        if current_ensembl_transcript not in gencode_genename_geneid_transid_exonobject[gene_name][gene_id]:
+            gencode_genename_geneid_transid_exonobject[gene_name][gene_id].setdefault(current_ensembl_transcript, list())
+            gencode_genename_geneid_transid_exonobject[gene_name][gene_id][current_ensembl_transcript].append(current_ensembl_exon)
+        else:
+            gencode_genename_geneid_transid_exonobject[gene_name][gene_id][current_ensembl_transcript].append(current_ensembl_exon)
+
+    return (gencode_genename_geneid_transid_exonobject)
+
+
+def parse_cds_gff3_line(
+    feature_dict,
+    current_ensembl_transcript,
+    gencode_genename_geneid_transid_cdsobject
+):
+    for inf in feature_dict["info"]:
+        field = inf.split("=")[0].lower()
+        result = inf.split("=")[1]
+
+        if field == "gene_name":
+            gene_name = result
+
+        elif field == "parent":
+            transcript_id = result
+
+        elif field == "gene_id":
+            gene_id = result
+
+        feature_dict[field] = result
+
+    current_ensembl_cds = EnsemblCds(**{k: v for k, v in feature_dict.items() if k in EnsemblCds.__annotations__})
+
+    if current_ensembl_cds is not None:
+        if gene_name not in gencode_genename_geneid_transid_cdsobject:
+            gencode_genename_geneid_transid_cdsobject.setdefault(gene_name, dict())
+        if gene_id not in gencode_genename_geneid_transid_cdsobject[gene_name]:
+            gencode_genename_geneid_transid_cdsobject[gene_name].setdefault(gene_id, dict())
+        if transcript_id not in gencode_genename_geneid_transid_cdsobject[gene_name][gene_id]:
+            gencode_genename_geneid_transid_cdsobject[gene_name][gene_id].setdefault(current_ensembl_transcript, list())
+            gencode_genename_geneid_transid_cdsobject[gene_name][gene_id][current_ensembl_transcript].append(current_ensembl_cds)
+        else:
+            gencode_genename_geneid_transid_cdsobject[gene_name][gene_id][current_ensembl_transcript].append(current_ensembl_cds)
+
+    return (gencode_genename_geneid_transid_cdsobject)
 
 
 def parse_gencode(
@@ -136,183 +270,80 @@ def parse_gencode(
 
     current_ensembl_gene = None
     current_ensembl_transcript = None
-    current_ensembl_exon = None
-    current_ensembl_cds = None
 
     gencode_genename_geneobject = dict()
     gencode_genename_geneid_transobject = dict()
-    
+
     # Creates a dictionary with a default value of an empty dictionary
     gencode_genename_geneid_transid_exonobject = defaultdict(dict)
     gencode_genename_geneid_transid_cdsobject = defaultdict(dict)
 
     with gzip.open(gencode_gff, 'rt') as fin:
         for line in fin:
-            feature_dict = dict()
-            gene_dict = {}
-            line = line.rstrip("\n")
-
-            if line.startswith("#"):
+            feature_dict = parse_gff3_line_general_info(line)
+            # when line starts with # it is returned None and we
+            # won't analyse the line
+            if feature_dict is None:
                 continue
-            tmp = line.split("\t")
-            feature_dict["feature"] = tmp[2].lower()
-            feature_dict["chromosome"] = tmp[0].replace("chr", "")
-            feature_dict["start"] = tmp[3]
-            feature_dict["end"] = tmp[4]
-            feature_dict["info"] = tmp[8].split(";")
 
-            # parsing genes and creating a EnsemblGene dataclass with its information
+            # parse genes and create EnsemblGene dataclass with its information
             if feature_dict["feature"] == "gene":
-                for inf in feature_dict["info"]:
-                    field = inf.split("=")[0].lower()
-                    result = inf.split("=")[1]
+                (
+                    current_ensembl_gene,
+                    gencode_genename_geneobject
+                ) = parse_gene_gff3_line(
+                    feature_dict,
+                    gencode_genename_geneobject
+                )
+            # parse transcript and create EnsemblTranscript instance
+            # with its information
+            elif feature_dict["feature"] == "transcript":
 
-                    if field == "gene_name":
-                        gene_name = result
-
-                    elif field == "gene_id":
-                        gene_id = result
-
-                    feature_dict[field] = result
-
-                # creting dataclass instance of EnsemblGenes with information of gene_dict that is
-                # which its keys are defined as variables in the dataclass
-                current_ensembl_gene = EnsemblGenes(**{k: v for k, v in gene_dict.items() if k in EnsemblGenes.__annotations__})
-                if current_ensembl_gene is not None:
-                    if gene_name not in gencode_genename_geneobject:
-                        gencode_genename_geneobject[gene_name] = list()
-                        gencode_genename_geneobject[gene_name].append(current_ensembl_gene)
-                    else:
-                        gencode_genename_geneobject[gene_name].append(current_ensembl_gene)
-
-            # parsing transcripts and creating a EnsemblTranscript dataclass with its information
-            elif feature == "transcript":
-
-                # Incrementing the attribute num_gencode_transcripts by 1 (numb of transcripts that the current gene have + 1)
+                # Incrementing the attribute num_gencode_transcripts by 1
+                # (numb of transcripts that the current gene have + 1)
                 current_ensembl_gene.increment_num_gencode_transcripts()
-                transcript_dict = dict()
-                transcript_dict["chromosome"] = chr
-                transcript_dict["start"] = pos
-                transcript_dict["end"] = end
 
-                for inf in info:
-                    field = inf.split("=")[0].lower()
-                    result = inf.split("=")[1]
-                    feature_fields.add(field)
+                (
+                    current_ensembl_transcript,
+                    gencode_genename_geneid_transobject
+                ) = parse_transcript_gff3_line(
+                    feature_dict,
+                    gencode_genename_geneid_transobject,
+                    mane_select_ens_id,
+                    mane_clin_ens_id,
+                    lrg_ensembl
+                )
 
-                    if field == "transcript_id":
-                        transcript_id = result
-                        if transcript_id in lrg_ensembl:
-                            transcript_dict["lrg_id"] = lrg_ensembl[transcript_id]["lrg_id"]
-                            transcript_dict["lrg_transcript"] = lrg_ensembl[transcript_id]["lrg_transcript"]
-                            transcript_dict["ccds"] = lrg_ensembl[transcript_id]["ccds"]
-
-                    elif field == "gene_name":
-                        gene_name = result
-                    
-                    elif field == "gene_id":
-                        gene_id = result
-                    
-                    # adding all transcript information in transcript_dict
-                    transcript_dict[field] = result
-                    # adding mane_select and clin
-                if transcript_id in mane_select_ens_id:
-                    transcript_dict["mane_select"] = True
-                if transcript_id in mane_clin_ens_id:
-                    transcript_dict["mane_clin"] = True
-
-                current_ensembl_transcript = EnsemblTranscript(**{k: v for k, v in transcript_dict.items() if k in EnsemblTranscript.__annotations__})
-                if current_ensembl_transcript is not None:
-                    if gene_name not in gencode_genename_geneid_transobject:
-                        gencode_genename_geneid_transobject.setdefault(gene_name, dict())
-                    if gene_id not in  gencode_genename_geneid_transobject[gene_name]:
-                        gencode_genename_geneid_transobject[gene_name].setdefault(gene_id, list())
-                        gencode_genename_geneid_transobject[gene_name][gene_id].append(current_ensembl_transcript)
-                    else:
-                        gencode_genename_geneid_transobject[gene_name][gene_id].append(current_ensembl_transcript)
-
-            # parsing exons and creating a EnsemblExon dataclass with its information
-            elif feature == "exon":
+            # parse exon and create EnsemblExon dataclass with its information
+            elif feature_dict["feature"] == "exon":
                 current_ensembl_transcript.increment_numb_exons()
+                gencode_genename_geneid_transid_exonobject = (
+                    parse_exon_gff3_line(
+                        feature_dict,
+                        current_ensembl_transcript,
+                        gencode_genename_geneid_transid_exonobject
+                    )
+                )
 
-                exon_dict = dict()
-                exon_dict["chromosome"] = chr
-                exon_dict["start"] = pos
-                exon_dict["end"] = end
-
-                for inf in info:
-                    field = inf.split("=")[0].lower()
-                    result = inf.split("=")[1]
-                    feature_fields.add(field)
-
-                    if field == "gene_name":
-                        gene_name = result
-                    
-                    elif field == "gene_id":
-                        gene_id = result
-
-                    exon_dict[field] = result
-
-                current_ensembl_exon = EnsemblExons(**{k: v for k, v in exon_dict.items() if k in EnsemblExons.__annotations__})
-                if current_ensembl_exon is not None:
-                    if gene_name not in gencode_genename_geneid_transid_exonobject:
-                        gencode_genename_geneid_transid_exonobject.setdefault(gene_name, dict())
-                    if gene_id not in  gencode_genename_geneid_transid_exonobject[gene_name]:
-                        gencode_genename_geneid_transid_exonobject[gene_name].setdefault(gene_id, dict())
-                    if current_ensembl_transcript not in gencode_genename_geneid_transid_exonobject[gene_name][gene_id]:
-                        gencode_genename_geneid_transid_exonobject[gene_name][gene_id].setdefault(current_ensembl_transcript, list())
-                        gencode_genename_geneid_transid_exonobject[gene_name][gene_id][current_ensembl_transcript].append(current_ensembl_exon)
-                    else:
-                        gencode_genename_geneid_transid_exonobject[gene_name][gene_id][current_ensembl_transcript].append(current_ensembl_exon)
-            
-            # parsing cds and creating a EnsemblCds dataclass with its information
-            elif feature == "cds":
+            # parse cds and create EnsemblCds dataclass with its information
+            elif feature_dict["feature"] == "cds":
                 current_ensembl_transcript.increment_numb_cds()
-
-                cds_dict = dict()
-                cds_dict["chromosome"] = chr
-                cds_dict["start"] = pos
-                cds_dict["end"] = end
-
-                for inf in info:
-                    field = inf.split("=")[0].lower()
-                    result = inf.split("=")[1]
-                    feature_fields.add(field)
-
-                    if field == "id":
-                        cds_id = result
-
-                    elif field == "gene_name":
-                        gene_name = result
-                    
-                    elif field == "parent":
-                        transcript_id = result
-                    
-                    elif field == "gene_id":
-                        gene_id = result
-
-                    cds_dict[field] = result
-
-                current_ensembl_cds = EnsemblCds(**{k: v for k, v in cds_dict.items() if k in EnsemblCds.__annotations__})
-
-                if current_ensembl_cds is not None:
-                    if gene_name not in gencode_genename_geneid_transid_cdsobject:
-                        gencode_genename_geneid_transid_cdsobject.setdefault(gene_name, dict())
-                    if gene_id not in gencode_genename_geneid_transid_cdsobject[gene_name]:
-                        gencode_genename_geneid_transid_cdsobject[gene_name].setdefault(gene_id, dict())
-                    if transcript_id not in gencode_genename_geneid_transid_cdsobject[gene_name][gene_id]:
-                        gencode_genename_geneid_transid_cdsobject[gene_name][gene_id].setdefault(current_ensembl_transcript, list())
-                        gencode_genename_geneid_transid_cdsobject[gene_name][gene_id][current_ensembl_transcript].append(current_ensembl_cds)
-                    else:
-                        gencode_genename_geneid_transid_cdsobject[gene_name][gene_id][current_ensembl_transcript].append(current_ensembl_cds)
+                gencode_genename_geneid_transid_cdsobject = (
+                    parse_cds_gff3_line(
+                        feature_dict,
+                        current_ensembl_transcript,
+                        gencode_genename_geneid_transid_cdsobject
+                    )
+                )
 
     logging.info(f"{gencode_gff} has been parsed successfully")
-    
-    # Adding the last gene, transcript, exon and cds found in the gff file
-    # as it is only added when the following line with the same element is found
-    # as consequence the lasts components are not included in the dictionary until now
 
-    return (gencode_genename_geneobject, gencode_genename_geneid_transobject, gencode_genename_geneid_transid_exonobject, gencode_genename_geneid_transid_cdsobject)
+    return (
+        gencode_genename_geneobject,
+        gencode_genename_geneid_transobject,
+        gencode_genename_geneid_transid_exonobject,
+        gencode_genename_geneid_transid_cdsobject
+    )
 
 
 (
@@ -326,24 +357,3 @@ def parse_gencode(
     mane_select_ens_id,
     lrg_ensembl
 )
-
-# gencode_gene_file = "gencode_genename_geneobject.txt"
-# gencode_transcript_file = "gencode_genename_geneid_transobject.txt"
-# gencode_exon_file = "gencode_genename_geneid_transid_exonobject.txt"
-# gencode_cds_file = "gencode_genename_geneid_transid_cdsobject.txt"
-
-# with open(gencode_gene_file, "w") as f:
-#     json.dump(gencode_genename_geneobject, f)
-# logging.info("gencode_genename_geneobject.txt created successfully")
-
-# with open(gencode_transcript_file, "w") as f2:
-#     json.dump(gencode_genename_geneid_transobject, f2)
-# logging.info("gencode_genename_geneid_transobject.txt created successfully")
-
-# with open(gencode_exon_file, "w") as f3:
-#     json.dump(gencode_genename_geneid_transid_exonobject, f3)
-# logging.info("gencode_genename_geneid_transid_exonobject.txt created successfully")
-
-# with open(gencode_cds_file, "w") as f4:
-#     json.dump(gencode_genename_geneid_transid_cdsobject, f4)
-# logging.info("gencode_genename_geneid_transid_cdsobject.txt created successfully")
