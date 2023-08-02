@@ -1,16 +1,17 @@
 from src.get_refseq_info import (
-    refseq_genename_geneobject,
-    refseq_genename_geneid_transobject,
-    refseq_genename_geneid_transid_exonobject,
-    refseq_genename_geneid_transid_cdsobject,
+    parse_refseq_gff,
+    refseq_gff_grch38,
+    refseq_gff_grch37
 )
+from src.global_variables import convert_chromosomes, logging
+from src.get_mane import get_mane, mane_gff
+from src.get_lrg_info import get_lrg_trancripts, lrg_gff
 from src.get_gencode_info import (
-    gencode_genename_geneobject,
-    gencode_genename_geneid_transobject,
-    gencode_genename_geneid_transid_exonobject,
-    gencode_genename_geneid_transid_cdsobject
+    parse_gencode,
+    gencode_gff_grch38,
+    gencode_gff_grch37
 )
-from src.parse_hugo import gene_name_to_synonym_dict
+from src.parse_hugo import obtain_gene_synonyms_from_hugo, hugo_path
 from src.global_variables import logging
 
 
@@ -22,17 +23,18 @@ def compare_refseq_ensembl_genes(
     logging.info("Comparing RefSeq and Ensembl genes")
     for gene_name, ensembl_gene_objects in gencode_genename_geneobject.items():
         gene_synonyms = set()
-        gene_synonyms.add(gene_name)
+        gene_synonyms.add(gene_name.upper())
 
         # geting the synonyms from the gene_name
 
-        if gene_name in gene_name_to_synonym_dict:
+        if gene_name.upper() in gene_name_to_synonym_dict:
             gene_synonyms.update(gene_name_to_synonym_dict[gene_name])
 
         # adding all gencode and refseq objects related to a gene_name or its synonyms
         ensembl_genes = list()
         refseq_genes = list()
         for gene_name in gene_synonyms:
+            gene_name = gene_name.upper()
             if gene_name in gencode_genename_geneobject:
                 ensembl_genes.extend(gencode_genename_geneobject[gene_name])
             if gene_name in refseq_genename_geneobject:
@@ -47,13 +49,13 @@ def compare_refseq_ensembl_genes(
                 refseq_coords = refseq_gene.get_coords()
                 if refseq_coords == ensembl_coords:
                     if ensembl_gene.refseq_same_gene_coords is None:
-                        ensembl_gene.refseq_same_gene_coords = {refseq_gene.gene_id}
+                        ensembl_gene.refseq_same_gene_coords = {refseq_gene}
                     else:
-                        ensembl_gene.refseq_same_gene_coords.add(refseq_gene.gene_id)
+                        ensembl_gene.refseq_same_gene_coords.add(refseq_gene)
                     if refseq_gene.gencode_same_gene_coords is None:
-                        refseq_gene.gencode_same_gene_coords = {ensembl_gene.gene_id}
+                        refseq_gene.gencode_same_gene_coords = {ensembl_gene}
                     else:
-                        refseq_gene.gencode_same_gene_coords.add(ensembl_gene.gene_id)
+                        refseq_gene.gencode_same_gene_coords.add(ensembl_gene)
 
 
 def compare_refseq_ensembl_transcripts(
@@ -89,13 +91,13 @@ def compare_refseq_ensembl_transcripts(
                 refseq_coords = refseq_trans.get_coords()
                 if refseq_coords == ensembl_coords:
                     if ensembl_trans.refseq_same_trans_coords is None:
-                        ensembl_trans.refseq_same_trans_coords = {refseq_trans.id}
+                        ensembl_trans.refseq_same_trans_coords = {refseq_trans.get_full_id()}
                     else:
-                        ensembl_trans.refseq_same_trans_coords.add(refseq_trans.id)
+                        ensembl_trans.refseq_same_trans_coords.add(refseq_trans.get_full_id())
                     if refseq_trans.gencode_same_trans_coords is None:
-                        refseq_trans.gencode_same_trans_coords = {ensembl_trans.id}
+                        refseq_trans.gencode_same_trans_coords = {ensembl_trans.get_full_id()}
                     else:
-                        refseq_trans.gencode_same_trans_coords.add(ensembl_trans.id)
+                        refseq_trans.gencode_same_trans_coords.add(ensembl_trans.get_full_id())
 
 
 def compare_refseq_ensembl_exons(
@@ -151,9 +153,9 @@ def compare_refseq_ensembl_exons(
                         # if the transcript class instance has refseq-same_exons_coords = None (default value),
                         # the value will be change to a list containing the refseq_gene id that matches the coordinates
                         if ensembl_trans_obj.refseq_same_exons_coords is not None:
-                            ensembl_trans_obj.refseq_same_exons_coords.append(refseq_trans_obj.id)
+                            ensembl_trans_obj.refseq_same_exons_coords.append(refseq_trans_obj.get_full_id())
                         else:
-                            ensembl_trans_obj.refseq_same_exons_coords = [refseq_trans_obj.id]
+                            ensembl_trans_obj.refseq_same_exons_coords = [refseq_trans_obj.get_full_id()]
 
 
 def compare_refseq_ensembl_cds(
@@ -211,10 +213,13 @@ def compare_refseq_ensembl_cds(
                         # if the transcript class instance has refseq-same_exons_coords = None (default value),
                         # the value will be change to a list containing the refseq_gene id that matches the coordinates
                         if ensembl_trans_obj.refseq_same_cds_coords is not None:
-                            ensembl_trans_obj.refseq_same_cds_coords.append(refseq_trans_obj.id)
-
+                            ensembl_trans_obj.refseq_same_cds_coords.append(refseq_trans_obj.get_full_id())
                         else:
-                            ensembl_trans_obj.refseq_same_cds_coords = [refseq_trans_obj.id]
+                            ensembl_trans_obj.refseq_same_cds_coords = [refseq_trans_obj.get_full_id()]
+                        if refseq_trans_obj.gencode_same_cds_coords is not None:
+                            refseq_trans_obj.gencode_same_cds_coords.append(ensembl_trans_obj.get_full_id())
+                        else:
+                            refseq_trans_obj.gencode_same_cds_coords = [ensembl_trans_obj.get_full_id()]
 
                         
             # print(ensembl_trans_obj.refseq_same_exons_coords, "same_exons_coords")
@@ -226,27 +231,67 @@ def compare_refseq_ensembl_cds(
 #             if trans_obj.transcript_id == "NM_153437.3":
 #                 print("found")
 #                 print(trans_obj.get_coords())
+if "__main__" == __name__:
 
-compare_refseq_ensembl_cds(
-    gencode_genename_geneid_transid_cdsobject,
-    refseq_genename_geneid_transid_cdsobject,
-    gene_name_to_synonym_dict
-)
+    lrg_ensembl, lrg_refseq = get_lrg_trancripts(lrg_gff)
 
-compare_refseq_ensembl_exons(
-    gencode_genename_geneid_transid_exonobject,
-    refseq_genename_geneid_transid_exonobject,
-    gene_name_to_synonym_dict
-)
+    (
+        mane_clin_ens_id,
+        mane_select_ens_id,
+        mane_clin_refseq_id,
+        mane_select_refseq_id
+    ) = get_mane(mane_gff)
 
-compare_refseq_ensembl_transcripts(
-    gencode_genename_geneid_transobject,
-    refseq_genename_geneid_transobject,
-    gene_name_to_synonym_dict
-)
+    (
+        refseq_genename_geneobject,
+        refseq_genename_geneid_transobject,
+        refseq_genename_geneid_transid_exonobject,
+        refseq_genename_geneid_transid_cdsobject,
+        gene_name_to_synonym_dict
+    ) = parse_refseq_gff(
+        refseq_gff_grch38,
+        mane_clin_refseq_id,
+        mane_select_refseq_id,
+        lrg_refseq
+    )
+    
+    (
+        gencode_genename_geneobject,
+        gencode_genename_geneid_transobject,
+        gencode_genename_geneid_transid_exonobject,
+        gencode_genename_geneid_transid_cdsobject
+    ) = parse_gencode(
+        gencode_gff_grch38,
+        mane_clin_ens_id,
+        mane_select_ens_id,
+        lrg_ensembl
+    )
+    gene_name_to_synonym_dict = obtain_gene_synonyms_from_hugo(hugo_path, gene_name_to_synonym_dict)
+    compare_refseq_ensembl_cds(
+        gencode_genename_geneid_transid_cdsobject,
+        refseq_genename_geneid_transid_cdsobject,
+        gene_name_to_synonym_dict
+    )
 
-compare_refseq_ensembl_genes(
-    gencode_genename_geneobject,
-    refseq_genename_geneobject,
-    gene_name_to_synonym_dict
-)
+    compare_refseq_ensembl_exons(
+        gencode_genename_geneid_transid_exonobject,
+        refseq_genename_geneid_transid_exonobject,
+        gene_name_to_synonym_dict
+    )
+
+    compare_refseq_ensembl_transcripts(
+        gencode_genename_geneid_transobject,
+        refseq_genename_geneid_transobject,
+        gene_name_to_synonym_dict
+    )
+
+    compare_refseq_ensembl_genes(
+        gencode_genename_geneobject,
+        refseq_genename_geneobject,
+        gene_name_to_synonym_dict
+    )
+
+    for gene_name, dictio in refseq_genename_geneid_transobject.items():
+        for gene_id, transobjs in dictio.items():
+            for transobj in transobjs:
+                print(gene_id, transobj)

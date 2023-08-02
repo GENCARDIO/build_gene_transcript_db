@@ -1,3 +1,5 @@
+lrg_gff = "/home/ocanal/Desktop/gene_isoforms/build_gene_transcript_db/db_uri/lrg/list_LRGs_transcripts_xrefs.txt"
+
 def get_lrg_trancripts(lrg_txt: str):
     lrg_ensembl = dict()
     lrg_refseq = dict()
@@ -26,11 +28,10 @@ def get_lrg_trancripts(lrg_txt: str):
                 lrg_refseq[refseq_transcript_id]["lrg_transcript"] = lrg_transcript
                 lrg_refseq[refseq_transcript_id]["ccds"] = ccds
 
-
-
-
     return (lrg_ensembl, lrg_refseq)
 
-lrg_ensembl, lrg_refseq = get_lrg_trancripts("/home/ocanal/Desktop/gene_isoforms/build_gene_transcript_db/db_uri/lrg/list_LRGs_transcripts_xrefs.txt")
+
+if "__main__" == __name__:
+    lrg_ensembl, lrg_refseq = get_lrg_trancripts(lrg_gff)
 
 
