@@ -9,7 +9,6 @@ from sqlalchemy import (
     ForeignKey,
     Boolean,
     Table,
-    UniqueConstraint,
     Index
 )
 from sqlalchemy.ext.declarative import declarative_base
@@ -18,11 +17,12 @@ from sqlalchemy_utils import create_database
 
 from src.global_variables import logging
 
+genes_db_name = "Ensembl_Refseq_db"
+
 
 def create_mysql_database():
     mysql_psw = os.environ["MYSQL_PWD"]
     # Now define and create the genes database
-    genes_db_name = "Ensembl_Refseq_37_db"
 
     logging.info(f"Creating database {genes_db_name}")
 
@@ -34,10 +34,10 @@ def create_mysql_database():
     try:
         engine.execute(f"CREATE DATABASE IF NOT EXISTS {genes_db_name}")
         engine.execute(f"USE {genes_db_name}")
-        print("database genes_db created successfully")
+        logging.info(f"database {genes_db_name} created successfully")
 
     except exc.SQLAlchemyError as e:
-        print("Error ocurred while creating the database:", str(e))
+        logging.info("Error ocurred while creating the database:", str(e))
 
     gencode_gene_synonyms_association = Table(
         "gencode_gene_synonyms_association",
@@ -45,56 +45,61 @@ def create_mysql_database():
         Column(
             "gencode_gene_id_genome_version",
             String(50),
-            ForeignKey("Genes.gene_id_genome_version")
+            ForeignKey("gencode_genes.gene_id_genome_version")
         ),
         Column(
             "synonym",
             String(50),
-            ForeignKey("Gene_Synonyms.synonym"),
+            ForeignKey("gene_synonyms.synonym"),
         )
     )
+
     refseq_gene_synonyms_association = Table(
         "refseq_gene_synonyms_association",
         Base.metadata,
         Column(
             "refseq_gene_primary_key",
             Integer,
-            ForeignKey("RefseqGenes.primary_key"),
+            ForeignKey("refseq_genes.primary_key"),
         ),
         Column(
             "synonym",
             String(50),
-            ForeignKey("Gene_Synonyms.synonym"),
+            ForeignKey("gene_synonyms.synonym"),
         )
     )
 
+    class File_version(Base):
+        __tablename__ = "file_versions"
+        database = Column(String(50), primary_key=True)
+        version = Column(String(50))
+        file_path = Column(String(50))
 
-    class Gene_Synonyms(Base):
-        __tablename__ = "Gene_Synonyms"
+    class Gene_synonyms(Base):
+        __tablename__ = "gene_synonyms"
         synonym = Column(String(50), primary_key=True)
 
         # genes = relationship("Genes", secondary=gencode_gene_synonyms_association, backref="synonims")
 
-    class Genes(Base):
-        __tablename__ = "Genes"
+    class Gencode_genes(Base):
+        __tablename__ = "gencode_genes"
         gene_id_genome_version = Column(String(50), primary_key=True)
-        id = Column(String(50))
+        id = Column(String(50), index=True)
         genome_version = Column(Integer)
-        start = Column(Integer, nullable=False)
-        end = Column(Integer, nullable=False)
-        chromosome = Column(String(20), nullable=False)
+        start_grch38 = Column(Integer)
+        end_grch38 = Column(Integer)
+        chromosome_grch38 = Column(String(50))
+        chromosome_grch37 = Column(String(50))
+        start_grch37 = Column(Integer)
+        end_grch37 = Column(Integer)
         gene_id = Column(String(50), nullable=False)
         tag = Column(String(100))
         num_gencode_transcripts = Column(Integer)
-        num_refseq_transcripts = Column(Integer)
-        gene_name = Column(String(50))
+        gene_name = Column(String(50), index=True)
         gene_type = Column(String(50))
         level = Column(Integer)
         havana_gene = Column(String(50))
         hgnc_id = Column(String(50))
-        liftover_chromosome = Column(String(50))
-        liftover_start = Column(Integer)
-        liftover_end = Column(Integer)
         
         # gene_grch37 = relationship(
         #     "Genes_Grch37",
@@ -114,55 +119,56 @@ def create_mysql_database():
         # )
 
         synonyms = relationship(
-            "Gene_Synonyms",
+            "Gene_synonyms",
             secondary=gencode_gene_synonyms_association,
             backref="gencode_associated_genes"
         )
         transcripts = relationship(
-            "Transcripts",
+            "Gencode_transcripts",
             back_populates="gene"
         )
 
         def __repr__(self):
             return f"Gene {self.gene_id_genome_version}"
-    # Create indexes for 'id' and 'genome_version' columns in the 'Genes' table
-    Index("idx_genes_id", Genes.id)
-    Index("idx_genes_genome_version", Genes.genome_version)
 
-    class RefseqGenes(Base):
-        __tablename__ = "RefseqGenes"
+
+    class Refseq_genes(Base):
+        __tablename__ = "refseq_genes"
         primary_key = Column(Integer, primary_key=True)
-        genome_version = Column(Integer)
-        gene_id = Column(String(50))
-        gene_name = Column(String(50), nullable=False)
-        start = Column(Integer, nullable=False)
-        end = Column(Integer, nullable=False)
-        chromosome = Column(String(50), nullable=False)
+        genome_version = Column(Integer, nullable=False)
+        gene_id = Column(String(50), nullable=False, index=True)
+        gene_name = Column(String(50), nullable=False, index=True)
+        chromosome_grch38 = Column(String(50))
+        start_grch38 = Column(Integer)
+        end_grch38 = Column(Integer)
+        chromosome_grch37 = Column(String(50))
+        start_grch37 = Column(Integer)
+        end_grch37 = Column(Integer)
         gene_type = Column(String(50))
         feature = Column(String(50))
         num_transcripts = Column(Integer)
         name = Column(String(50))
         hgnc_id = Column(String(50))
         gene_biotype = Column(String(50))
-        liftover_chromosome = Column(String(50))
-        liftover_start = Column(Integer)
-        liftover_end = Column(Integer)
+
 
         # Relationships
         # one to many with transcripts:
         transcripts = relationship(
-            "RefseqTranscripts",
+            "Refseq_transcripts",
             back_populates="gene"
         )
         # Many to many relationships with synonyms and gencode genes
         synonyms = relationship(
-            "Gene_Synonyms",
+            "Gene_synonyms",
             secondary=refseq_gene_synonyms_association,
             backref="genes_synonyms"
         )
 
         def __repr__(self):
-            return(f"RefseqGene primary key :{self.primary_key} , gene_id: {self.gene_id}")
+            return (
+                f"RefseqGene primary key :{self.primary_key} , gene_id:\
+                {self.gene_id}")
         # gencode_same_gene_coords = relationship(
         #     "Genes",
         #     secondary=Refseq_Gencode_genes_association,
@@ -174,28 +180,28 @@ def create_mysql_database():
         'transcripts_refseq_gencode_same_coords',
         Base.metadata,
         Column(
-            'transcript_id',
+            'gencode_transcript_id',
             String(50),
-            ForeignKey('Transcripts.transcript_id_genome_version'),
+            ForeignKey('gencode_transcripts.transcript_id_genome_version'),
         ),
         Column(
             'refseq_transcript_id',
             String(50),
-            ForeignKey('RefseqTranscripts.id_genome_version'),
+            ForeignKey('refseq_transcripts.id_genome_version'),
         ),
     )
     association_table_exon_coords = Table(
         'transcripts_refseq_gencode_same_exon_coords',
         Base.metadata,
         Column(
-            'transcript_id',
+            'gencode_transcript_id',
             String(50),
-            ForeignKey('Transcripts.transcript_id_genome_version'),
+            ForeignKey('gencode_transcripts.transcript_id_genome_version'),
         ),
         Column(
-            'id',
+            'refseq_transcript_id',
             String(50),
-            ForeignKey('RefseqTranscripts.id_genome_version'),
+            ForeignKey('refseq_transcripts.id_genome_version'),
         ),
 
     )
@@ -203,27 +209,30 @@ def create_mysql_database():
         'transcripts_refseq_gencode_same_cds_coords',
         Base.metadata,
         Column(
-            'transcript_id',
+            'gencode_transcript_id',
             String(50),
-            ForeignKey('Transcripts.transcript_id_genome_version'),
+            ForeignKey('gencode_transcripts.transcript_id_genome_version'),
         ),
         Column(
             'refseq_transcript_id',
             String(50),
-            ForeignKey('RefseqTranscripts.id_genome_version'),
+            ForeignKey('refseq_transcripts.id_genome_version'),
         ),
     )
 
-    class RefseqTranscripts(Base):
-        __tablename__ = "RefseqTranscripts"
+    class Refseq_transcripts(Base):
+        __tablename__ = "refseq_transcripts"
         id_genome_version = Column(String(50), primary_key=True)
         id = Column(String(50), index=True)
         genome_version = Column(Integer)
-        start = Column(Integer, nullable=False)
-        end = Column(Integer, nullable=False)
-        chromosome = Column(String(50), nullable=False)
-        gene_id = Column(Integer)
-        gene_name = Column(String(50))
+        start_grch38 = Column(Integer)
+        end_grch38 = Column(Integer)
+        chromosome_grch38 = Column(String(50))
+        chromosome_grch37 = Column(String(50))
+        start_grch37 = Column(Integer)
+        end_grch37 = Column(Integer)
+        gene_id = Column(Integer, index=True)
+        gene_name = Column(String(50), index=True)
         hgnc_id = Column(String(50))
         lrg_id = Column(String(50))
         lrg_transcript = Column(String(50))
@@ -232,11 +241,10 @@ def create_mysql_database():
         numb_cds = Column(Integer)
         mane_clin = Column(Boolean)
         mane_select = Column(Boolean)
-        liftover_chromosome = Column(String(50))
-        liftover_start = Column(Integer)
-        liftover_end = Column(Integer)
+        gencode_mane_select_id = Column(String(50))
+
         # Foreign key to establish relationship with RefseqGene
-        gene_pk = Column(Integer, ForeignKey("RefseqGenes.primary_key"))
+        gene_pk = Column(Integer, ForeignKey("refseq_genes.primary_key"))
 
         # refseq_transcript_grch37 = relationship(
         #     "RefseqTranscripts_Grch37",
@@ -245,31 +253,31 @@ def create_mysql_database():
         # )
         # One to many relationships
         exons = relationship(
-            "RefseqExons", 
+            "Refseq_exons", 
             back_populates="transcript"  # name of the exons column
         )
         cds = relationship(
-            "RefseqCds",
+            "Refseq_cds",
             back_populates="transcript"  # name of cds column
         )
         gene = relationship(
-            "RefseqGenes",
+            "Refseq_genes",
             back_populates="transcripts"
         )
 
         # Many to many relationships
         gencode_same_trans_coords = relationship(
-            "Transcripts",
+            "Gencode_transcripts",
             secondary=association_table_trans_coords,
             backref="gencode_transcripts",
         )
         gencode_same_exons_coords = relationship(
-            "Transcripts",
+            "Gencode_transcripts",
             secondary=association_table_exon_coords,
             backref="gencode_trans_same_exons"
         )
         gencode_same_cds_coords = relationship(
-            "Transcripts",
+            "Gencode_transcripts",
             secondary=association_table_cds_coords,
             backref="gencode_trans_same_cds"
         )
@@ -277,22 +285,23 @@ def create_mysql_database():
         def __repr__(self):
             return f"Refseq Transcript{self.id_genome_version}"
 
-    class RefseqExons(Base):
-        __tablename__ = "RefseqExons"
+    class Refseq_exons(Base):
+        __tablename__ = "refseq_exons"
         exon_id_genome_version = Column(String(50), primary_key=True)
-        exon_id = Column(String(50))
+        exon_id = Column(String(50), index=True)
         genome_version = Column(Integer)
-        start = Column(Integer)
-        end = Column(Integer)
-        chromosome = Column(String(50))
+        start_grch38 = Column(Integer)
+        end_grch38 = Column(Integer)
+        chromosome_grch38 = Column(String(50))
+        chromosome_grch37 = Column(String(50))
+        start_grch37 = Column(Integer)
+        end_grch37 = Column(Integer)
         exon_number = Column(Integer)
-        liftover_chromosome = Column(String(50))
-        liftover_start = Column(Integer)
-        liftover_end = Column(Integer)
+
         # Foreign key to relate with Transcript
         transcript_id = Column(
             String(50),
-            ForeignKey("RefseqTranscripts.id"),
+            ForeignKey("refseq_transcripts.id"),
             nullable=False,
             foreign_keys=exon_id
         )
@@ -304,61 +313,66 @@ def create_mysql_database():
         # )
         # Relationships
         transcript = relationship(
-            "RefseqTranscripts",
+            "Refseq_transcripts",
             back_populates="exons"
         )
 
         def __repr__(self):
             return f"Refseq Exon {self.exon_id_genome_version}"
 
-    class RefseqCds(Base):
-        __tablename__ = "RefseqCds"
+    class Refseq_cds(Base):
+        __tablename__ = "refseq_cds"
         primary_key = Column(Integer, primary_key=True)
         genome_version = Column(Integer)
         id = Column(String(50))
-        start = Column(Integer)
-        end = Column(Integer)
-        chromosome = Column(String(50))
-        liftover_chromosome = Column(String(50))
-        liftover_start = Column(Integer)
-        liftover_end = Column(Integer)
+        start_grch38 = Column(Integer)
+        end_grch38 = Column(Integer)
+        chromosome_grch38 = Column(String(50))
+        chromosome_grch37 = Column(String(50))
+        start_grch37 = Column(Integer)
+        end_grch37 = Column(Integer)
 
         # Foreign key to relate with Transcript
-        transcript_id = Column(String(50), ForeignKey("RefseqTranscripts.id"))
+        transcript_id = Column(
+            String(50),
+            ForeignKey("refseq_transcripts.id")
+        )
 
         # Relationships
         transcript = relationship(
-            "RefseqTranscripts",
+            "Refseq_transcripts",
             back_populates="cds"
         )
 
         def __repr__(self):
             return f"Refseq Cds {self.primary_key}"
 
-    class Transcripts(Base):
-        __tablename__ = "Transcripts"
+    class Gencode_transcripts(Base):
+        __tablename__ = "gencode_transcripts"
         transcript_id_genome_version = Column(String(50), primary_key=True)
         transcript_id = Column(String(50), index=True)
         genome_version = Column(Integer)
         mane_select = Column(Boolean, nullable=True, default=None)
+        refseq_mane_select_id = Column(String(50))
         mane_clin = Column(Boolean, nullable=True, default=None)
-        start = Column(Integer, nullable=False)
-        end = Column(Integer, nullable=False)
-        chromosome = Column(String(10), nullable=False)
+        start_grch38 = Column(Integer)
+        end_grch38 = Column(Integer)
+        chromosome_grch38 = Column(String(50))
+        chromosome_grch37 = Column(String(50))
+        start_grch37 = Column(Integer)
+        end_grch37 = Column(Integer)
         transcript_type = Column(String(50))
         transcript_name = Column(String(50))
         id = Column(String(50), nullable=False)
         havana_transcript = Column(String(50))
         protein_id = Column(String(50))
-        gene_id = Column(String(50), ForeignKey("Genes.id"))
+        gene_id = Column(String(50), ForeignKey("gencode_genes.id"))
         lrg_transcript = Column(String(50))
         lrg_id = Column(String(50))
         ccds = Column(String(50))
         numb_exons = Column(Integer)
         numb_cds = Column(Integer)
-        liftover_chromosome = Column(String(50))
-        liftover_start = Column(Integer)
-        liftover_end = Column(Integer)
+
 
         # transcript_grch37 = relationship(
         #     "Transcripts_Grch37",
@@ -367,30 +381,30 @@ def create_mysql_database():
         # )
         # One to many relationships
         gene = relationship(
-            "Genes",
+            "Gencode_genes",
             back_populates="transcripts"  # column name of Genes relationship
         )
         exons = relationship(
-            "Exons",
+            "Gencode_exons",
             back_populates="transcript"  # column name of exons relationship
             )
         cds = relationship(
-            "Cds",
+            "Gencode_cds",
             back_populates="transcript"  # column name  of cds relationship
         )
         # Many to many relationships
         refseq_same_trans_coords = relationship(
-            "RefseqTranscripts",
+            "Refseq_transcripts",
             secondary=association_table_trans_coords,
             backref="refseq_transcripts_same_trans_coords",
         )
         refseq_same_exons_coords = relationship(
-            "RefseqTranscripts",
+            "Refseq_transcripts",
             secondary=association_table_exon_coords,
             backref="refseq_trans_same_exons_coords"
         )
         refseq_same_cds_coords = relationship(
-            "RefseqTranscripts",
+            "Refseq_transcripts",
             secondary=association_table_cds_coords,
             backref="refseq_trans_same_cds_coords",
             overlaps="gencode_same_cds_coords,gencode_trans_same_cds"
@@ -399,23 +413,30 @@ def create_mysql_database():
         def __repr__(self):
             return f"Transcript {self.transcript_id_genome_version}"
 
-    class Exons(Base):
-        __tablename__ = "Exons"
+    class Gencode_exons(Base):
+        __tablename__ = "gencode_exons"
         exon_id_genome_version = Column(String(50), primary_key=True)
-        exon_id = Column(String(50))
+        exon_id = Column(String(50), index=True)
         genome_version = Column(Integer)
         id = Column(String(50), nullable=False)
         exon_number = Column(Integer)
-        start = Column(Integer, nullable=False)
-        end = Column(Integer, nullable=False)
-        chromosome = Column(String(50), nullable=False)
-        transcript_id = Column(String(50), ForeignKey("Transcripts.transcript_id_genome_version"), nullable=True)
-        liftover_chromosome = Column(String(50))
-        liftover_start = Column(Integer)
-        liftover_end = Column(Integer)
+        start_grch38 = Column(Integer)
+        end_grch38 = Column(Integer)
+        chromosome_grch38 = Column(String(50))
+        chromosome_grch37 = Column(String(50))
+        start_grch37 = Column(Integer)
+        end_grch37 = Column(Integer)
+        transcript_id = Column(
+            String(50),
+            ForeignKey("gencode_transcripts.transcript_id_genome_version"),
+            nullable=True
+        )
 
         # Relationships
-        transcript = relationship("Transcripts", back_populates="exons")
+        transcript = relationship(
+            "Gencode_transcripts",
+            back_populates="exons"
+        )
 
         # exon_grch37 = relationship(
         #     "Exons_Grch37",
@@ -426,28 +447,33 @@ def create_mysql_database():
         def __repr__(self):
             return f"Exon {self.exon_id_genome_version}"
 
-    class Cds(Base):
-        __tablename__ = "Cds"
+    class Gencode_cds(Base):
+        __tablename__ = "gencode_cds"
         primary_key = Column(Integer, primary_key=True)
         genome_version = Column(Integer)
-        id = Column(String(50))
-        start = Column(Integer, nullable=False)
-        end = Column(Integer, nullable=False)
-        chromosome = Column(String(50), nullable=False)
-        transcript_id = Column(String(50), ForeignKey("Transcripts.transcript_id_genome_version"))
+        id = Column(String(50), index=True)
+        start_grch38 = Column(Integer)
+        end_grch38 = Column(Integer)
+        chromosome_grch38 = Column(String(50))
+        chromosome_grch37 = Column(String(50))
+        start_grch37 = Column(Integer)
+        end_grch37 = Column(Integer)
+        transcript_id = Column(
+            String(50),
+            ForeignKey("gencode_transcripts.transcript_id_genome_version")
+        )
         exon_id = Column(String(50))
         exon_number = Column(Integer)
-        liftover_chromosome = Column(String(50))
-        liftover_start = Column(Integer)
-        liftover_end = Column(Integer)
 
         # Relationships
-        transcript = relationship("Transcripts", back_populates="cds")
+        transcript = relationship(
+            "Gencode_transcripts",
+            back_populates="cds"
+        )
 
         def __repr__(self):
             return f"CDS: {self.primary_key}"
-    
-    
+
     # gencode_37_gene_synonyms_association = Table(
     #     "gencode_grch37_gene_synonyms_association",
     #     Base.metadata,
@@ -840,46 +866,17 @@ def create_mysql_database():
     Base.metadata.create_all(engine)
 
     return (
-        Gene_Synonyms,
-        RefseqGenes,
-        RefseqTranscripts,
-        RefseqExons,
-        RefseqCds,
-        Genes,
-        Transcripts,
-        Exons,
-        Cds,
-        # RefseqGenes_Grch37,
-        # RefseqTranscripts_Grch37,
-        # RefseqExons_Grch37,
-        # RefseqCds_Grch37,
-        # Genes_Grch37,
-        # Transcripts_Grch37,
-        # Exons_Grch37,
-        # Cds_Grch37,
-        gencode_gene_synonyms_association,
-        association_table_trans_coords,
-        association_table_exon_coords,
-        association_table_cds_coords,
-        session
-    )
-
-    # inspector = inspect(engine)
-    # # Check if the Genes table exists in the database
-    # if not inspector.has_table("Genes"):
-    #     # Create all tables defined in the base class
-    # Base.metadata.create_all(engine)
-
-    return (
-        Gene_Synonyms,
-        RefseqGenes,
-        RefseqTranscripts,
-        RefseqExons,
-        RefseqCds,
-        Genes,
-        Transcripts,
-        Exons,
-        Cds,
+        Gene_synonyms,
+        Refseq_genes,
+        Refseq_transcripts,
+        Refseq_exons,
+        Refseq_cds,
+        Gencode_genes,
+        Gencode_transcripts,
+        Gencode_exons,
+        Gencode_cds,
+        File_version,
+        refseq_gene_synonyms_association,
         gencode_gene_synonyms_association,
         association_table_trans_coords,
         association_table_exon_coords,
@@ -899,6 +896,7 @@ if "__main__" == __name__:
         Transcripts,
         Exons,
         Cds,
+        refseq_gene_synonyms_association,
         gencode_gene_synonyms_association,
         association_table_trans_coords,
         association_table_exons,

@@ -4,7 +4,7 @@ from src.get_refseq_info import (
     refseq_gff_grch37
 )
 from src.global_variables import convert_chromosomes, logging
-from src.get_mane import get_mane, mane_gff
+from src.get_mane import get_ensembl_mane, mane_ensembl_gff
 from src.get_lrg_info import get_lrg_trancripts, lrg_gff
 from src.get_gencode_info import (
     parse_gencode,
@@ -26,8 +26,8 @@ def compare_refseq_ensembl_genes(
         gene_synonyms.add(gene_name.upper())
 
         # geting the synonyms from the gene_name
-
-        if gene_name.upper() in gene_name_to_synonym_dict:
+        gene_name = gene_name.upper()
+        if gene_name in gene_name_to_synonym_dict:
             gene_synonyms.update(gene_name_to_synonym_dict[gene_name])
 
         # adding all gencode and refseq objects related to a gene_name or its synonyms

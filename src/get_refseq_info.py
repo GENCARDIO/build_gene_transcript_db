@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 import gzip
+import re
 
 from src.global_variables import (
     convert_chromosomes,
@@ -8,13 +9,60 @@ from src.global_variables import (
     lo_38_to_37,
     lo_37_to_38
 )
-from src.get_mane import get_mane, mane_gff
+from src.get_mane import get_refseq_mane, mane_refseq_gff
 from src.get_lrg_info import get_lrg_trancripts, lrg_gff
 
 refseq_gff_grch38 = "/home/ocanal/Desktop/gene_isoforms/build_gene_transcript_db/db_uri/refseq/GRCh38_latest_genomic.gff.gz"
 refseq_gff_grch37 = "/home/ocanal/Desktop/gene_isoforms/build_gene_transcript_db/db_uri/refseq/GRCh37_latest_genomic.gff.gz"
 mock_refseq_gff_grch38 = "/home/ocanal/Desktop/gene_isoforms/build_gene_transcript_db/db_uri/refseq/mock.GRCh38_latest_genomic.gff.gz"
 mock_refseq_gff_grch37 = "/home/ocanal/Desktop/gene_isoforms/build_gene_transcript_db/db_uri/refseq/mock.GRCh37_latest_genomic.gff.gz"
+
+def get_refseq_conf(
+    refseq_gff: str,
+    versions_dict: dict
+):
+    """
+    Add file_path and refseq version to the versions_dict
+    which will be used as config file:
+    Params:
+    -------
+        refseq_gff(str): file path of refseq gff file
+        versions_dict(dict): dict that stores resources information
+    Return:
+    -------
+        versions_dict: with refseq information
+    """
+    genome_version_pattern = r'GRCh(\d+)'
+    genome_build_pattern = r'#!genome-build (.+)'
+    genome_build_accession_pattern = r'NCBI_Assembly:(.+)'
+    with gzip.open(refseq_gff, "rt") as file:
+        for line in file:
+            if not line.startswith("#"):
+                break
+            if "GRCh" in line:
+                genome_version_match = re.search(genome_version_pattern, line)
+                genome_build_match = re.search(genome_build_pattern, line)
+            if "genome-build-accession" in line:
+                genome_build_accession_match = re.search(genome_build_accession_pattern, line)
+
+    if genome_version_match:
+        genome_version = f"grch{genome_version_match.group(1)}"
+    else:
+        raise ValueError(
+            f"Genome version not found in genome-build line of file:\n\
+            {refseq_gff}"
+        )
+    if genome_build_match:
+        genome_build = genome_build_match.group(1)
+        versions_dict["resources"]["refseq"][genome_version]["genome_build"] = genome_build
+    if genome_build_accession_match:
+        genome_build_accession = genome_build_accession_match.group(1)
+        versions_dict["resources"]["refseq"][genome_version]["accession_version"] = genome_build_accession
+    versions_dict["resources"]["refseq"][genome_version]["file_path"] = refseq_gff
+    return (versions_dict)
+    
+
+
 
 @dataclass
 class RefseqGene:
@@ -58,14 +106,14 @@ class RefseqGene:
         self.num_transcripts += 1
 
     def get_coordinate_liftover(self):
-        chromosome_name = f"chr{self.chromosome}"
+        
         if self.genome_version == 38:
             start = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start)
             )
             end = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -89,13 +137,12 @@ class RefseqGene:
                     {self.liftover_chromosome}:{self.liftover_start}-{self.liftover_end}"
                 )
         elif self.genome_version == 37:
-            print(self.chromosome, self.start, self.end)
             start = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start)
             )
             end = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -189,6 +236,7 @@ class RefseqTranscript:
     numb_cds:                   int = field(default=0)
     mane_clin:                  bool = field(default=False)
     mane_select:                bool = field(default=False)
+    gencode_mane_select_id:     str = field(default=None)
     gencode_same_trans_coords:  str = field(default=None)
     gencode_same_cds_coords:    str = field(default=None)
     liftover_chromosome:        int = field(default=None)
@@ -216,15 +264,15 @@ class RefseqTranscript:
         return False
     
     def get_coordinate_liftover(self):
-        chromosome_name = f"chr{self.chromosome}"
+        
 
         if self.genome_version == 38:
             start = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start)
             )
             end = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -248,11 +296,11 @@ class RefseqTranscript:
                     {self.liftover_chromosome}:{self.liftover_start}-{self.liftover_end}")
         elif self.genome_version == 37:
             start = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start),
             )
             end = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -351,14 +399,14 @@ class RefseqExons:
         return f"{self.chromosome}:{int(self.start)}-{int(self.end)}"
 
     def get_coordinate_liftover(self):
-        chromosome_name = f"chr{self.chromosome}"
+        
         if self.genome_version == 38:
             start = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start)
             )
             end = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -383,11 +431,11 @@ class RefseqExons:
                 )
         elif self.genome_version == 37:
             start = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start),
             )
             end = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -455,23 +503,25 @@ class RefseqCds:
     liftover_chromosome:        int = field(default=None)
     liftover_start:             int = field(default=None)
     liftover_end:               int = field(default=None)
-
     def __post_init__(self):
-        RefseqCds.last_assigned_primary_key += 1
-        self.primary_key = RefseqCds.last_assigned_primary_key
+        RefseqGene.last_assigned_primary_key +=1
+        self.primary_key = RefseqGene.last_assigned_primary_key
+
+    def get_full_id(self):
+        return (f"{self.primary_key}_{self.genome_version}")
     
     def get_coords(self):
         return f"{self.chromosome}:{int(self.start)}-{int(self.end)}"
 
     def get_coordinate_liftover(self):
-        chromosome_name = f"chr{self.chromosome}"
+        
         if self.genome_version == 38:
             start = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start)
             )
             end = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -496,11 +546,11 @@ class RefseqCds:
                 )
         elif self.genome_version == 37:
             start = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start),
             )
             end = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -630,7 +680,7 @@ def parse_gene_lines(
 def parse_transcript_lines(
     feature_dict,
     mane_clin_refseq_id,
-    mane_select_refseq_id,
+    mane_select_refseq_ensembl,
     lrg_refseq,
     refseq_genename_geneid_transobject,
     current_gene_obj,
@@ -672,8 +722,10 @@ def parse_transcript_lines(
             feature_dict["transcript_id"] = transcript_id
             if transcript_id in mane_clin_refseq_id:
                 feature_dict["mane_clin"] = True
-            if transcript_id in mane_select_refseq_id:
+            if transcript_id in mane_select_refseq_ensembl:
                 feature_dict["mane_select"] = True
+                gencode_id = mane_select_refseq_ensembl[transcript_id]
+                feature_dict["gencode_mane_select_id"] = gencode_id
             if transcript_id in lrg_refseq:
                 feature_dict["lrg_id"] = lrg_refseq[transcript_id]["lrg_id"]
                 feature_dict["lrg_transcript"] = lrg_refseq[transcript_id]["lrg_transcript"]
@@ -766,6 +818,8 @@ def parse_exon_lines(
         elif field == "gene":
             gene_name = result
         elif field == "transcript_id":
+            if "-" in result:
+                result = result.split("-")[0]
             transcript_id = result
             feature_dict["transcript_id"] = transcript_id
         elif field == "parent":
@@ -828,6 +882,28 @@ def parse_cds_lines(
     refseq_genename_geneid_transid_cdsobject,
     genome_v
 ):
+    """
+    For each line of the gff file that is conisdered a cds, it parses
+    the line creating a RefseqCds instance with all associated information
+    and inserts it in refseq_genename_geneid_transid_cdsobject dictionary
+
+    Params:
+    -------
+        feature_dict: Contains common information of the gff files
+            (e.g. start,end...)
+        current_trans_obj: transcript object that the cds belongs to
+        refseq_genename_geneid_transid_cdsobject: dictionary that stores
+            the cds object associating it with its transcript id, geneid
+            and gene name
+        genome_v: genome version of the cds 
+    
+    Return:
+    -------
+        feature_dict: completed with all information about the parsed cds
+        current_cds_obj: cds object containing all cds information parsed
+        refseq_genename_geneid_transid_cdsobject: dictionary with the cds_obj
+            parsed being incorporated.
+    """
     for inf in feature_dict["info"]:
         field = inf.split("=")[0].lower()
         result = inf.split("=")[1].upper()
@@ -836,7 +912,9 @@ def parse_cds_lines(
         elif field == "gene":
             gene_name = result
         elif field == "parent":
-            feature_dict["transcript_id"] = result.replace("RNA-", "")
+            result = result.replace("RNA-", "")
+            # Some transcripts contain "-x" after transcript id
+            feature_dict["transcript_id"] = result
         elif field == "dbxref":
             dbxref_results = result.split(",")
             for dbxref_result in dbxref_results:
@@ -868,7 +946,8 @@ def parse_cds_lines(
 
 
 def get_gene_synonyms(feature_dict, gene_name_to_synonym_dict):
-    
+    """
+    """
     gene_name = feature_dict["name"]
     # Adding gene synonyms to the dict
     if "gene_synonyms" in feature_dict:
@@ -878,7 +957,10 @@ def get_gene_synonyms(feature_dict, gene_name_to_synonym_dict):
             if gene_name in gene_name_to_synonym_dict:
                 gene_name_to_synonym_dict[gene_name].add(gene_synonym)
             else:
-                gene_name_to_synonym_dict[gene_name] = {gene_synonym, gene_name}
+                gene_name_to_synonym_dict[gene_name] = {
+                    gene_synonym,
+                    gene_name
+                }
             # creating a dict that maps gene_synonym : gene_names
             if gene_synonym in gene_name_to_synonym_dict:
                 gene_name_to_synonym_dict[gene_synonym].add(gene_name)
@@ -933,7 +1015,6 @@ def parse_refseq_gff(
     refseq_genename_geneid_transobject = dict()
     refseq_genename_geneid_transid_exonobject = dict()
     refseq_genename_geneid_transid_cdsobject = dict()
-    gene_name_to_synonym_dict = dict()
     current_gene_obj = None
     current_trans_obj = None
 

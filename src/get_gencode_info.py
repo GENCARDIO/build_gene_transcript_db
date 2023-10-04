@@ -3,8 +3,9 @@ import gzip
 from collections import defaultdict
 import logging
 from typing import ClassVar
+import re
 
-from src.get_mane import get_mane, mane_gff
+from src.get_mane import get_ensembl_mane, mane_ensembl_gff
 from src.global_variables import (
     logging,
     lo_38_to_37,  # To perform liftover from grch38 to 37
@@ -16,6 +17,63 @@ gencode_gff_grch38 = "/home/ocanal/Desktop/gene_isoforms/build_gene_transcript_d
 gencode_gff_grch37 = "/home/ocanal/Desktop/gene_isoforms/build_gene_transcript_db/db_uri/gencode/gencode.v44lift37.annotation.gff3.gz"
 mock_gencode_gff_grch38 = "/home/ocanal/Desktop/gene_isoforms/build_gene_transcript_db/db_uri/gencode/mock.gencode.v43.annotation.gff3.gz"
 mock_gencode_gff_grch37 = "/home/ocanal/Desktop/gene_isoforms/build_gene_transcript_db/db_uri/gencode/mock.gencode.v44lift37.annotation.gff3.gz"
+
+
+def get_gencode_conf(
+        gencode_gff: str,
+        versions_dict: dict
+) -> dict:
+    """
+    Add gencode file_path, gencode and ensambl version to the versions_dict 
+    which will be used ad config file:
+    Params:
+    -------
+        gencode_gff(str): file path of gencode gff file
+        versions_dict(dict): dict to store resources information
+    Return:
+    -------
+        versions_dict: dictionary with gencode file path and version included
+    """
+    gencode_version_pattern = r'version (\d+)'
+    ensembl_version_pattern = r'Ensembl (\d+)'
+    with gzip.open(gencode_gff, "rt") as file:
+        # iterate over lines counting it using enumerate
+        for line in file:
+            if not line.startswith("#"):
+                break
+            if "description" in line:
+                gencode_match = re.search(gencode_version_pattern, line)
+                ensembl_match = re.search(ensembl_version_pattern, line)
+                # if GRCh37 only appears in liftover version
+                if "GRCh37" in line:
+                    genome_version = "grch37"
+                elif "GRCh38" in line:
+                    genome_version = "grch38"
+                else:
+                    raise ValueError(
+                        f"GRCh37 or GRCh38 not found in description line:\n\
+                        {line} of file:\n {gencode_gff}"
+                    )
+
+    if gencode_match:
+        gencode_version = gencode_match.group(1)
+        versions_dict["resources"]["gencode"][genome_version]["gencode_version"] = gencode_version
+    else:
+        logging.critical(
+            f"Gencode version have not been found in {line},\
+            pattern used: {gencode_version_pattern}"
+        )
+    if ensembl_match:
+        ensembl_version = ensembl_match.group(1)
+        versions_dict["resources"]["gencode"][genome_version]["ensembl_version"] = ensembl_version
+    else:
+        logging.critical(
+            f"Ensembl version have not been found in {line},\
+            pattern used: {ensembl_version_pattern}"
+        )
+    versions_dict["resources"]["gencode"][genome_version]["file_path"] = gencode_gff
+    return (versions_dict)
+
 
 @dataclass
 class EnsemblGenes:
@@ -68,15 +126,14 @@ class EnsemblGenes:
         return f"{self.chromosome}:{int(self.start)}-{int(self.end)}"
 
     def get_coordinate_liftover(self):
-        chromosome_name = f"chr{self.chromosome}"
 
         if self.genome_version == 38:    
             start = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start)
             )
             end = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -102,11 +159,11 @@ class EnsemblGenes:
         elif self.genome_version == 37:
 
             start = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start),
             )
             end = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -214,6 +271,7 @@ class EnsemblTranscript:
     numb_exons:                 int = field(default=0)
     numb_cds:                   int = field(default=0)
     mane_select:                bool = field(default=False)
+    refseq_mane_select_id:      str = field(default= None)
     mane_clin:                  bool = field(default=False)
     havana_transcript:          str = field(default=None)
     refseq_same_trans_coords:   str = field(default=None)
@@ -265,15 +323,15 @@ class EnsemblTranscript:
         return False
 
     def get_coordinate_liftover(self):
-        chromosome_name = f"chr{self.chromosome}"
+        
 
         if self.genome_version == 38:
             start = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start)
             )
             end = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -298,11 +356,11 @@ class EnsemblTranscript:
                 )
         elif self.genome_version == 37:
             start = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start),
             )
             end = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -427,15 +485,15 @@ class EnsemblExons:
         return f"{self.chromosome}:{int(self.start)}-{int(self.end)}"
     
     def get_coordinate_liftover(self):
-        chromosome_name = f"chr{self.chromosome}"
+        
 
         if self.genome_version == 38:
             start = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start)
             )
             end = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -460,11 +518,11 @@ class EnsemblExons:
                 )
         elif self.genome_version == 37:
             start = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start),
             )
             end = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -554,14 +612,14 @@ class EnsemblCds:
         return f"{self.chromosome}:{int(self.start)}-{int(self.end)}"
 
     def get_coordinate_liftover(self):
-        chromosome_name = f"chr{self.chromosome}"
+        
         if self.genome_version == 38:
             start = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start)
             )
             end = lo_38_to_37.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -586,11 +644,11 @@ class EnsemblCds:
                 )
         elif self.genome_version == 37:
             start = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.start),
             )
             end = lo_37_to_38.convert_coordinate(
-                chromosome_name,
+                self.chromosome,
                 int(self.end)
             )
             if start:
@@ -656,7 +714,7 @@ def parse_gff3_line_general_info(line):
         return None
     tmp = line.split("\t")
     feature_dict["feature"] = tmp[2].lower()
-    feature_dict["chromosome"] = str(tmp[0].replace("chr", ""))
+    feature_dict["chromosome"] = tmp[0]
     feature_dict["start"] = tmp[3]
     feature_dict["end"] = tmp[4]
     feature_dict["info"] = tmp[8].split(";")
@@ -700,7 +758,7 @@ def parse_gene_gff3_line(
 def parse_transcript_gff3_line(
     feature_dict: dict,
     gencode_genename_geneid_transobject,
-    mane_select_ens_id,
+    mane_select_ensembl_refseq: dict,
     mane_clin_ens_id,
     lrg_ensembl,
     genome_v: int
@@ -710,7 +768,7 @@ def parse_transcript_gff3_line(
         result = inf.split("=")[1].upper()
 
         if field == "id":
-            transcript_id = result
+            transcript_id = result.split(".")[0]
             if transcript_id in lrg_ensembl:
                 feature_dict["lrg_id"] = lrg_ensembl[transcript_id]["lrg_id"]
                 feature_dict["lrg_transcript"] = lrg_ensembl[transcript_id]["lrg_transcript"]
@@ -724,9 +782,11 @@ def parse_transcript_gff3_line(
 
         # adding all transcript information in feature_dict
         feature_dict[field] = result
-        # adding mane_select and clin
-    if transcript_id in mane_select_ens_id:
+    # adding mane_select and clin
+    if transcript_id in mane_select_ensembl_refseq:
         feature_dict["mane_select"] = True
+        refseq_mane_id = mane_select_ensembl_refseq[transcript_id]
+        feature_dict["refseq_mane_select_id"] = refseq_mane_id
     if transcript_id in mane_clin_ens_id:
         feature_dict["mane_clin"] = True
     

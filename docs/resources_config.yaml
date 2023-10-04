@@ -1,0 +1,31 @@
+database_name: Refseq_Ensembl
+main_path: "/home/ocanal/Desktop/gene_isoforms/build_gene_transcript_db/db_uri/"
+resources:
+  mane:
+    grch37:
+      file_path: ""
+      mock_file_path: ""
+    grch38:
+      refseq_file_path: "mane/MANE.GRCh38.v1.2.refseq_genomic.gff.gz"
+      ensembl_file_path: "mane/MANE.GRCh38.v1.2.ensembl_genomic.gff.gz"
+      mock_ensembl_file_path: "mane/mock.MANE.GRCh38.v1.2.ensembl_genomic.gff.gz"
+      mock_refseq_file_path: "mane/mock.MANE.GRCh38.v1.2.refseq_genomic.gff.gz"
+  gencode:
+    grch37:
+      file_path: "gencode/gencode.v44lift37.annotation.gff3.gz"
+      mock_file_path: "gencode/mock.gencode.v44lift37.annotation.gff3.gz"
+    grch38:
+      file_path: "gencode/gencode.v44.annotation.gff3.gz"
+      mock_file_path: "gencode/mock.gencode.v44.annotation.gff3.gz"
+  refseq:
+    grch37:
+      file_path: "refseq/GRCh37_latest_genomic.gff.gz"
+      mock_file_path: "refseq/mock.GRCh37_latest_genomic.gff.gz"
+    grch38:
+      file_path: "refseq/GRCh38_latest_genomic.gff.gz"
+      mock_file_path: "refseq/mock.GRCh38_latest_genomic.gff.gz"
+  lrg:
+    file_path: "lrg/list_LRGs_transcripts_xrefs.txt"
+  hugo:
+    file_path: "hugo/hgnc_complete_set.txt"
+

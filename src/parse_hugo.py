@@ -1,9 +1,18 @@
 import csv
 from src.get_refseq_info import parse_refseq_gff, refseq_gff_grch38
-from src.get_mane import get_mane, mane_gff
+from src.get_mane import get_ensembl_mane, mane_ensembl_gff
 from src.get_lrg_info import get_lrg_trancripts, lrg_gff
 from src.global_variables import logging
+
 hugo_path = "/home/ocanal/Desktop/gene_isoforms/build_gene_transcript_db/db_uri/hugo/hgnc_complete_set.txt"
+
+
+def get_hugo_conf(
+    hugo_path: str,
+    versions_dict: dict
+):
+    versions_dict["resources"]["hugo"]["path"] = hugo_path
+    return versions_dict
 
 
 def obtain_gene_synonyms_from_hugo(hugo_tsv, gene_name_to_synonym_dict):
